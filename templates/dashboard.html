@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Student Dashboard - AI Study Assistant</title>
 
     <link rel="stylesheet"
@@ -12,17 +13,79 @@
 
 <body>
     <div class="register-container">
+
         <h1>Welcome, {{ name }}!</h1>
 
         <p>
-            You have successfully logged in to AI Study Assistant.
+            Welcome to your AI Study Assistant dashboard.
         </p>
 
-        <h2>Your Learning Dashboard</h2>
+        <hr>
 
-        <p>Study tools will be added here as we develop the project.</p>
+        <h2>Upload Study Materials</h2>
+
+        <p>
+            Upload your study notes in PDF format.
+            Maximum file size: 10 MB.
+        </p>
+
+        <!-- Display success or error messages -->
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <p>{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- PDF upload form -->
+        <form action="{{ url_for('upload') }}"
+              method="POST"
+              enctype="multipart/form-data">
+
+            <label for="file">Choose a PDF file</label>
+
+            <input
+                type="file"
+                id="file"
+                name="file"
+                accept=".pdf,application/pdf"
+                required
+            >
+
+            <button type="submit">Upload PDF</button>
+        </form>
+
+        <hr>
+
+        <h2>My Study Materials</h2>
+
+        {% if materials %}
+            <ul>
+                {% for material in materials %}
+                    <li>
+                        📄 {{ material["original_filename"] }}
+                        <small>
+                            — Uploaded: {{ material["upload_date"] }}
+                        </small>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>
+                You haven't uploaded any study materials yet.
+            </p>
+        {% endif %}
+
+        <hr>
+
+        <p>
+            AI summaries and study questions will be added in
+            the next stages of development.
+        </p>
 
         <a href="{{ url_for('logout') }}">Logout</a>
+
     </div>
 </body>
 </html>
