@@ -3,6 +3,8 @@ import os
 import sqlite3
 import uuid
 
+from pypdf import PdfReader
+
 from flask import (
     Flask,
     render_template,
@@ -230,6 +232,8 @@ def upload():
     stored_filename = f"{uuid.uuid4().hex}.pdf"
     file_path = os.path.join(UPLOAD_FOLDER, stored_filename)
 
+    connection = None
+
     try:
         file.save(file_path)
 
@@ -247,17 +251,76 @@ def upload():
             )
         )
         connection.commit()
-        connection.close()
 
     except Exception:
+        if connection is not None:
+            connection.rollback()
+
         if os.path.exists(file_path):
             os.remove(file_path)
 
         flash("The file could not be uploaded. Please try again.")
         return redirect(url_for("dashboard"))
 
+    finally:
+        if connection is not None:
+            connection.close()
+
     flash("PDF uploaded successfully!")
     return redirect(url_for("dashboard"))
+
+
+# Read text from an uploaded PDF
+@app.route("/read-pdf/<int:material_id>")
+def read_pdf(material_id):
+    # Make sure the student is logged in
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    connection = get_db_connection()
+
+    # Only allow access to this student's own study material
+    material = connection.execute(
+        """
+        SELECT id, original_filename, stored_filename
+        FROM study_materials
+        WHERE id = ? AND user_id = ?
+        """,
+        (material_id, session["user_id"])
+    ).fetchone()
+
+    connection.close()
+
+    if material is None:
+        return "Study material not found.", 404
+
+    file_path = os.path.join(
+        app.config["UPLOAD_FOLDER"],
+        material["stored_filename"]
+    )
+
+    try:
+        reader = PdfReader(file_path)
+
+        extracted_text = "\n\n".join(
+            page.extract_text() or ""
+            for page in reader.pages
+        )
+
+        if not extracted_text.strip():
+            extracted_text = (
+                "No readable text was found. "
+                "This PDF may contain scanned images."
+            )
+
+    except Exception:
+        return "Could not read this PDF file.", 400
+
+    return render_template(
+        "read_pdf.html",
+        filename=material["original_filename"],
+        extracted_text=extracted_text
+    )
 
 
 # Logout

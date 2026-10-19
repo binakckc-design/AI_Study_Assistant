@@ -64,11 +64,16 @@
             <ul>
                 {% for material in materials %}
                     <li>
-                        📄 {{ material["original_filename"] }}
-                        <small>
-                            — Uploaded: {{ material["upload_date"] }}
-                        </small>
-                    </li>
+    📄 {{ material["original_filename"] }}
+
+    <small>
+        — Uploaded: {{ material["upload_date"] }}
+    </small>
+
+    <a href="{{ url_for('read_pdf', material_id=material['id']) }}">
+        Read PDF
+    </a>
+</li>
                 {% endfor %}
             </ul>
         {% else %}

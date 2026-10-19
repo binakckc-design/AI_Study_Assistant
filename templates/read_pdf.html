@@ -1,0 +1,43 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{{ filename }} - AI Study Assistant</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+    <style>
+        .pdf-text {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            text-align: left;
+            line-height: 1.7;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="register-container">
+        <h1>PDF Reader</h1>
+
+        <h2>{{ filename }}</h2>
+
+        <p>Text extracted from your study material:</p>
+
+        <div class="pdf-text">{{ extracted_text }}</div>
+
+        <p>
+            <a href="{{ url_for('dashboard') }}">
+                Back to Dashboard
+            </a>
+        </p>
+    </div>
+</body>
+</html>
