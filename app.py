@@ -4,6 +4,8 @@ import sqlite3
 import uuid
 
 from pypdf import PdfReader
+from dotenv import load_dotenv
+from google import genai
 
 from flask import (
     Flask,
@@ -17,6 +19,18 @@ from flask import (
 
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+
+
+# Load environment variables from the .env file
+load_dotenv()
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# Connect to Gemini only if an API key is available
+gemini_client = None
+
+if GEMINI_API_KEY:
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 app = Flask(__name__)
@@ -273,7 +287,6 @@ def upload():
 # Read text from an uploaded PDF
 @app.route("/read-pdf/<int:material_id>")
 def read_pdf(material_id):
-    # Make sure the student is logged in
     if "user_id" not in session:
         return redirect(url_for("login"))
 
@@ -320,6 +333,100 @@ def read_pdf(material_id):
         "read_pdf.html",
         filename=material["original_filename"],
         extracted_text=extracted_text
+    )
+
+
+# Generate an AI summary of an uploaded PDF
+@app.route("/summarize-pdf/<int:material_id>")
+def summarize_pdf(material_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    if gemini_client is None:
+        return (
+            "Gemini API key is missing. "
+            "Please check your .env file."
+        ), 500
+
+    connection = get_db_connection()
+
+    # Students can summarize only their own PDFs
+    material = connection.execute(
+        """
+        SELECT id, original_filename, stored_filename
+        FROM study_materials
+        WHERE id = ? AND user_id = ?
+        """,
+        (material_id, session["user_id"])
+    ).fetchone()
+
+    connection.close()
+
+    if material is None:
+        return "Study material not found.", 404
+
+    file_path = os.path.join(
+        app.config["UPLOAD_FOLDER"],
+        material["stored_filename"]
+    )
+
+    try:
+        reader = PdfReader(file_path)
+
+        pdf_text = "\n\n".join(
+            page.extract_text() or ""
+            for page in reader.pages
+        )
+
+        if not pdf_text.strip():
+            return (
+                "No readable text was found in this PDF. "
+                "Scanned PDFs may require OCR."
+            ), 400
+
+        # Limit text sent to the AI to control request size
+        pdf_text = pdf_text[:30000]
+
+        prompt = f"""
+        You are a helpful AI study assistant.
+
+        Summarize the following study material in simple language.
+
+        Include:
+        1. The main topic
+        2. Important points
+        3. Key definitions
+        4. Important facts students should remember
+        5. A short conclusion
+
+        Use clear headings and bullet points.
+        Do not invent information that is not in the material.
+
+        Study material:
+        {pdf_text}
+        """
+
+        response = gemini_client.models.generate_content(
+            model="gemini-3.8-flash",
+            contents=prompt
+        )
+
+        summary = response.text
+
+        if not summary:
+            return "The AI did not return a summary. Please try again.", 502
+
+    except Exception:
+        app.logger.exception("PDF summarization failed.")
+        return (
+            "Sorry, the PDF could not be summarized right now. "
+            "Please try again later."
+        ), 502
+
+    return render_template(
+        "summary.html",
+        filename=material["original_filename"],
+        summary=summary
     )
 
 

@@ -1,0 +1,92 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI PDF Summary - AI Study Assistant</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6fb;
+            margin: 0;
+            padding: 30px 15px;
+            color: #222;
+        }
+
+        .container {
+            max-width: 850px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            color: #4f46e5;
+            margin-top: 0;
+        }
+
+        .filename {
+            color: #666;
+            overflow-wrap: anywhere;
+        }
+
+        .summary {
+            line-height: 1.8;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            margin-top: 25px;
+        }
+
+        .note {
+            background: #eef2ff;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+
+        .button {
+            display: inline-block;
+            margin-top: 20px;
+            margin-right: 8px;
+            padding: 11px 18px;
+            background: #4f46e5;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+        }
+
+        .button:hover {
+            background: #3730a3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>AI-Generated Study Summary</h1>
+
+        <p class="filename">
+            <strong>PDF file:</strong> {{ filename }}
+        </p>
+
+        <hr>
+
+        <div class="summary">{{ summary }}</div>
+
+        <div class="note">
+            <strong>Study tip:</strong>
+            Review this summary alongside your original PDF.
+            AI-generated summaries may occasionally omit or misinterpret details.
+        </div>
+
+        <a href="{{ url_for('dashboard') }}" class="button">
+            Back to Dashboard
+        </a>
+    </div>
+</body>
+</html>
