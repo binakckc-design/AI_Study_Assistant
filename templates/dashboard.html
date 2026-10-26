@@ -1,4 +1,4 @@
-
+html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -81,6 +81,12 @@
                         <a href="{{ url_for('summarize_pdf', material_id=material['id']) }}">
                             ✨ Summarize with AI
                         </a>
+
+                        &nbsp; | &nbsp;
+
+                        <a href="{{ url_for('generate_quiz', material_id=material['id']) }}">
+                            📝 Generate Quiz
+                        </a>
                     </li>
 
                     <br>
@@ -95,8 +101,8 @@
         <hr>
 
         <p>
-            More AI study features, including study questions,
-            will be added in future stages of development.
+            Upload a PDF, read its content, generate an AI summary,
+            or test your understanding with an AI-generated quiz.
         </p>
 
         <a href="{{ url_for('logout') }}">Logout</a>

@@ -1,0 +1,115 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Results - AI Study Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <style>
+        .result-container {
+            max-width: 850px;
+            margin: 30px auto;
+            padding: 25px;
+        }
+
+        .score-card {
+            text-align: center;
+            background: #eff6ff;
+            padding: 25px;
+            border-radius: 12px;
+            margin: 25px 0;
+        }
+
+        .score {
+            font-size: 42px;
+            font-weight: bold;
+            color: #2563eb;
+        }
+
+        .result-card {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+        }
+
+        .correct {
+            color: #15803d;
+            font-weight: bold;
+        }
+
+        .incorrect {
+            color: #b91c1c;
+            font-weight: bold;
+        }
+
+        .result-button {
+            display: inline-block;
+            padding: 12px 20px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="result-container">
+        <h1>🎉 Your Quiz Results</h1>
+        <p><strong>Study Material:</strong> {{ filename }}</p>
+
+        <div class="score-card">
+            <h2>Your Score</h2>
+            <div class="score">{{ score }} / {{ total }}</div>
+            <p>
+                You answered {{ score }} out of {{ total }} questions correctly.
+            </p>
+
+            {% if total > 0 %}
+                <p><strong>Percentage:</strong> {{ ((score / total) * 100)|round|int }}%</p>
+            {% endif %}
+        </div>
+
+        <h2>Review Your Answers</h2>
+
+        {% for result in results %}
+            <div class="result-card">
+                <h3>Question {{ loop.index }}</h3>
+                <p>{{ result.question }}</p>
+
+                <p>
+                    <strong>Your answer:</strong>
+                    {% if result.selected is not none %}
+                        {{ result.options[result.selected] }}
+                    {% else %}
+                        Not answered
+                    {% endif %}
+                </p>
+
+                <p>
+                    <strong>Correct answer:</strong>
+                    {{ result.options[result.correct] }}
+                </p>
+
+                {% if result.is_correct %}
+                    <p class="correct">✓ Correct!</p>
+                {% else %}
+                    <p class="incorrect">✗ Incorrect</p>
+                {% endif %}
+
+                <p><strong>Explanation:</strong> {{ result.explanation }}</p>
+            </div>
+        {% endfor %}
+
+        <a class="result-button" href="{{ url_for('dashboard') }}">
+            Back to Dashboard
+        </a>
+    </div>
+</body>
+</html>
+```

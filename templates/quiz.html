@@ -1,0 +1,109 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Quiz - AI Study Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <style>
+        .quiz-container {
+            width: min(850px, calc(100% - 32px));
+            margin: 30px auto;
+            padding: 25px;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.06);
+        }
+
+        .question-card {
+            background: #fbfbff;
+            padding: 22px;
+            margin: 22px 0;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .question-card h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        .option {
+            display: block;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #dbe2ea;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .option:hover {
+            background: #f1f5ff;
+        }
+
+        .option input {
+            margin-right: 10px;
+        }
+
+        .quiz-button {
+            padding: 12px 22px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .submit-button {
+            background: #5555e8;
+            color: white;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 18px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="quiz-container">
+        <h1>📝 AI-Generated Quiz</h1>
+
+        <p><strong>Study Material:</strong> {{ filename }}</p>
+        <p>Answer all five questions, then click Submit Quiz to see your score and explanations.</p>
+
+        <form action="{{ url_for('submit_quiz', material_id=material_id) }}" method="POST">
+
+            {% for question in questions %}
+                {% set question_number = loop.index %}
+
+                <div class="question-card">
+                    <h3>Question {{ question_number }}</h3>
+                    <p>{{ question.question }}</p>
+
+                    {% for option in question.options %}
+                        <label class="option">
+                            <input
+                                type="radio"
+                                name="question_{{ question_number }}"
+                                value="{{ loop.index0 }}"
+                                required
+                            >
+                            {{ option }}
+                        </label>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+
+            <button type="submit" class="quiz-button submit-button">
+                Submit Quiz
+            </button>
+        </form>
+
+        <a class="back-link" href="{{ url_for('dashboard') }}">← Back to Dashboard</a>
+    </div>
+</body>
+</html>
+```

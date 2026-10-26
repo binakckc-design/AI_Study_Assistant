@@ -2,6 +2,8 @@
 import os
 import sqlite3
 import uuid
+import json
+import re
 
 from pypdf import PdfReader
 from dotenv import load_dotenv
@@ -64,6 +66,35 @@ def allowed_file(filename):
         "." in filename
         and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
     )
+
+
+# Find a student's own study material
+def get_student_material(material_id):
+    connection = get_db_connection()
+
+    material = connection.execute(
+        """
+        SELECT id, original_filename, stored_filename
+        FROM study_materials
+        WHERE id = ? AND user_id = ?
+        """,
+        (material_id, session["user_id"])
+    ).fetchone()
+
+    connection.close()
+    return material
+
+
+# Extract readable text from a PDF
+def extract_pdf_text(file_path, max_characters=30000):
+    reader = PdfReader(file_path)
+
+    text = "\n\n".join(
+        page.extract_text() or ""
+        for page in reader.pages
+    )
+
+    return text[:max_characters]
 
 
 # Create the database tables
@@ -290,19 +321,7 @@ def read_pdf(material_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
 
-    connection = get_db_connection()
-
-    # Only allow access to this student's own study material
-    material = connection.execute(
-        """
-        SELECT id, original_filename, stored_filename
-        FROM study_materials
-        WHERE id = ? AND user_id = ?
-        """,
-        (material_id, session["user_id"])
-    ).fetchone()
-
-    connection.close()
+    material = get_student_material(material_id)
 
     if material is None:
         return "Study material not found.", 404
@@ -313,12 +332,7 @@ def read_pdf(material_id):
     )
 
     try:
-        reader = PdfReader(file_path)
-
-        extracted_text = "\n\n".join(
-            page.extract_text() or ""
-            for page in reader.pages
-        )
+        extracted_text = extract_pdf_text(file_path)
 
         if not extracted_text.strip():
             extracted_text = (
@@ -327,6 +341,7 @@ def read_pdf(material_id):
             )
 
     except Exception:
+        app.logger.exception("PDF reading failed.")
         return "Could not read this PDF file.", 400
 
     return render_template(
@@ -343,24 +358,9 @@ def summarize_pdf(material_id):
         return redirect(url_for("login"))
 
     if gemini_client is None:
-        return (
-            "Gemini API key is missing. "
-            "Please check your .env file."
-        ), 500
+        return "Gemini API key is missing. Please check your .env file.", 500
 
-    connection = get_db_connection()
-
-    # Students can summarize only their own PDFs
-    material = connection.execute(
-        """
-        SELECT id, original_filename, stored_filename
-        FROM study_materials
-        WHERE id = ? AND user_id = ?
-        """,
-        (material_id, session["user_id"])
-    ).fetchone()
-
-    connection.close()
+    material = get_student_material(material_id)
 
     if material is None:
         return "Study material not found.", 404
@@ -371,21 +371,13 @@ def summarize_pdf(material_id):
     )
 
     try:
-        reader = PdfReader(file_path)
-
-        pdf_text = "\n\n".join(
-            page.extract_text() or ""
-            for page in reader.pages
-        )
+        pdf_text = extract_pdf_text(file_path)
 
         if not pdf_text.strip():
             return (
                 "No readable text was found in this PDF. "
                 "Scanned PDFs may require OCR."
             ), 400
-
-        # Limit text sent to the AI to control request size
-        pdf_text = pdf_text[:30000]
 
         prompt = f"""
         You are a helpful AI study assistant.
@@ -428,6 +420,218 @@ def summarize_pdf(material_id):
         filename=material["original_filename"],
         summary=summary
     )
+
+
+# Generate a multiple-choice quiz from an uploaded PDF
+@app.route("/generate-quiz/<int:material_id>")
+def generate_quiz(material_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    if gemini_client is None:
+        return "Gemini API key is missing. Please check your .env file.", 500
+
+    material = get_student_material(material_id)
+
+    if material is None:
+        return "Study material not found.", 404
+
+    file_path = os.path.join(
+        app.config["UPLOAD_FOLDER"],
+        material["stored_filename"]
+    )
+
+    try:
+        pdf_text = extract_pdf_text(file_path)
+
+        if not pdf_text.strip():
+            return (
+                "No readable text was found in this PDF. "
+                "Scanned PDFs may require OCR."
+            ), 400
+
+        prompt = f"""
+        Create exactly 5 multiple-choice quiz questions based only
+        on the study material below.
+
+        Return ONLY valid JSON, without Markdown code fences, using
+        this exact structure:
+
+        {{
+          "questions": [
+            {{
+              "question": "Question text",
+              "options": [
+                "Option A",
+                "Option B",
+                "Option C",
+                "Option D"
+              ],
+              "answer": 0,
+              "explanation": "Brief explanation"
+            }}
+          ]
+        }}
+
+        Rules:
+        - Each question must have exactly four options.
+        - The answer must be an integer from 0 to 3.
+        - The answer is the zero-based index of the correct option.
+        - Questions must test understanding of the supplied material.
+        - Explanations must be short and accurate.
+        - Do not include answers in the question text.
+        - Do not invent facts outside the material.
+
+        Study material:
+        {pdf_text}
+        """
+
+        response = gemini_client.models.generate_content(
+            model="gemini-3.8-flash",
+            contents=prompt
+        )
+
+        response_text = response.text
+
+        if not response_text:
+            raise ValueError("Gemini returned an empty quiz response.")
+
+        # Remove optional Markdown code fences
+        response_text = response_text.strip()
+        response_text = re.sub(
+            r"^```(?:json)?\s*|\s*```$",
+            "",
+            response_text,
+            flags=re.IGNORECASE
+        )
+
+        quiz_data = json.loads(response_text)
+        questions = quiz_data.get("questions", [])
+
+        if len(questions) != 5:
+            raise ValueError("The generated quiz did not contain 5 questions.")
+
+        # Validate the generated questions before showing them
+        for question in questions:
+            if not isinstance(question.get("question"), str):
+                raise ValueError("A quiz question is invalid.")
+
+            options = question.get("options")
+            answer = question.get("answer")
+
+            if not isinstance(options, list) or len(options) != 4:
+                raise ValueError("A quiz question must have 4 options.")
+
+            if (
+                not isinstance(answer, int)
+                or isinstance(answer, bool)
+                or answer not in range(4)
+            ):
+                raise ValueError("A quiz answer is invalid.")
+
+            if not all(isinstance(option, str) for option in options):
+                raise ValueError("A quiz option is invalid.")
+
+            if not isinstance(question.get("explanation"), str):
+                question["explanation"] = ""
+
+        # Keep correct answers on the server, not in the quiz form
+        session["active_quiz"] = {
+            "material_id": material_id,
+            "questions": questions
+        }
+
+    except Exception:
+        app.logger.exception("Quiz generation failed.")
+        return (
+            "Sorry, the quiz could not be generated right now. "
+            "Please try again."
+        ), 502
+
+    # Remove answers from the data sent to the browser
+    public_questions = []
+
+    for question in questions:
+        public_questions.append({
+            "question": question["question"],
+            "options": question["options"]
+        })
+
+    return render_template(
+        "quiz.html",
+        filename=material["original_filename"],
+        questions=public_questions,
+        material_id=material_id
+    )
+
+
+# Check quiz answers and calculate the score
+@app.route("/submit-quiz/<int:material_id>", methods=["POST"])
+def submit_quiz(material_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    active_quiz = session.get("active_quiz")
+
+    if (
+        not active_quiz
+        or active_quiz.get("material_id") != material_id
+    ):
+        flash("Please generate a new quiz before submitting answers.")
+        return redirect(
+            url_for("generate_quiz", material_id=material_id)
+        )
+
+    questions = active_quiz["questions"]
+    results = []
+    score = 0
+
+    for index, question in enumerate(questions):
+        submitted_answer = request.form.get(f"question_{index}")
+
+        try:
+            selected_index = int(submitted_answer)
+        except (TypeError, ValueError):
+            selected_index = -1
+
+        if selected_index not in range(4):
+            selected_index = -1
+
+        correct_index = question["answer"]
+        is_correct = selected_index == correct_index
+
+        if is_correct:
+            score += 1
+
+        results.append({
+            "question": question["question"],
+            "options": question["options"],
+            "selected": selected_index,
+            "correct": correct_index,
+            "is_correct": is_correct,
+            "explanation": question.get("explanation", "")
+        })
+
+    # Remove the active quiz after submission
+    session.pop("active_quiz", None)
+
+    return render_template(
+        "quiz_result.html",
+        filename=get_material_filename(material_id),
+        results=results,
+        score=score,
+        total=len(questions)
+    )
+
+
+# Get the filename only for the logged-in student's own PDF
+def get_material_filename(material_id):
+    material = get_student_material(material_id)
+
+    if material is None:
+        return "Study Material"
+
+    return material["original_filename"]
 
 
 # Logout
